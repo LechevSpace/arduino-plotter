@@ -3,16 +3,26 @@ name = "arduino-plotter"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-
-default-run = "arduino-plotter"
+authors = ["Lechev.space Ltd <dev@lechev.space>", "Lachezar Lechev"]
 
 [dependencies]
+tracing = "0.1"
+
+thiserror = "1.0.60"
+
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 
-tokio = {version = "1", features = ["full"]}
+tokio = { version = "1", features = ["full"] }
 tokio-websockets = { version = "0.8", features = ["client", "server", "sha1_smol", "rand"] }
-futures-util = { version = "0.3.30", features = ["sink"] }
+tokio-stream = "0.1"
+futures-util = { version = "0.3", features = ["sink"] }
+
 http = "1"
-rand = "0.8.5"
-tokio-stream = "0.1.15"
+
+parse-display = "0.9"
+
+rand = "0.8"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
