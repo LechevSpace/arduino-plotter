@@ -1,34 +1,98 @@
-use std::{collections::HashMap, ops::{Deref, DerefMut}};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use serde::{Deserialize, Serialize};
 
-///
-/// ```
-/// use arduino_plotter::protocol::{CommandName, Command};
-///
-/// let data = CommandName::Data;
-/// let data_json = serde_json::json!({ "command": "", "data": [1, 2, 3] });
-/// let command = serde_json::from_value::<Command<Vec<u64>>>(data_json).expect("should be valid");
-///
-/// assert!(matches!(command.command, CommandName::Data));
-///
-/// ```
+use parse_display::{Display, FromStr};
+
+pub const LINE_COLORS: [&str; 8] = [
+    "#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9", "#F0E442", "#95A5A6",
+];
+pub const EOL: &[&str] = &["", "\n", "\r", "\r\n"];
+
+pub fn is_eol(str: String) -> bool {
+    EOL.iter().any(|eol| str.contains(eol))
+}
+
+pub trait IntoCommand {
+    fn into_command(&self) -> serde_json::Value;
+}
+
+impl IntoCommand for MiddlewareCommand {
+    fn into_command(&self) -> serde_json::Value {
+        let inner_command = Command::<MonitorSettings>::from(self.clone());
+
+        serde_json::to_value(inner_command).unwrap()
+    }
+}
+
+impl IntoCommand for ClientCommand {
+    fn into_command(&self) -> serde_json::Value {
+        let inner_command = Command::<serde_json::Value>::from(self.clone());
+
+        serde_json::to_value(inner_command).unwrap()
+    }
+}
+
+impl<T> IntoCommand for Data<T>
+where
+    T: Serialize + core::fmt::Display,
+{
+    fn into_command(&self) -> serde_json::Value {
+        serde_json::to_value(
+            self.0
+                .iter()
+                .map(|display| display.to_string())
+                .collect::<Vec<String>>(),
+        )
+        .unwrap()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Command<T> {
     pub command: CommandName,
     pub data: T,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Data lines message that can be send to Arduino serial plotter
+///
+/// <https://docs.arduino.cc/software/ide-v2/tutorials/ide-v2-serial-plotter>
+///
+/// ```
+/// use arduino_plotter::protocol::Data;
+///
+/// // data with no line ending
+/// let data = Data(vec!["L1:1,L2:2,L3:3,L4:4".to_string(), "Label_1:99,Label_2:98,Label_3:97,Label_4:96".to_string()]);
+/// let data_json = serde_json::json!(["L1:1,L2:2,L3:3,L4:4", "Label_1:99,Label_2:98,Label_3:97,Label_4:96"]);
+/// let from_json = serde_json::from_value::<Data<String>>(data_json).expect("should be valid");
+///
+/// assert_eq!(data, from_json);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Data<T: core::fmt::Display>(pub Vec<T>);
+
+#[derive(Debug, Clone, Serialize, Deserialize, Display, FromStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[display(style = "SNAKE_CASE")]
 pub enum CommandName {
-    #[serde(rename = "")]
-    Data,
+    /// Middleware Command (from WS to `arduino-serial-plotter`)
     OnSettingsDidChange,
+    // Client Command (from `arduino-serial-plotter` to WS)
     SendMessage,
+    // Client Command (from `arduino-serial-plotter` to WS)
     ChangeSettings,
 }
 
+/// Middleware Command (from WS to `arduino-serial-plotter`)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    into = "Command<MonitorSettings>",
+    try_from = "Command<MonitorSettings>"
+)]
 pub struct MiddlewareCommand(pub MonitorSettings);
 impl From<MiddlewareCommand> for Command<MonitorSettings> {
     fn from(value: MiddlewareCommand) -> Self {
@@ -39,16 +103,33 @@ impl From<MiddlewareCommand> for Command<MonitorSettings> {
     }
 }
 
+impl TryFrom<Command<MonitorSettings>> for MiddlewareCommand {
+    type Error = serde_json::Error;
+
+    fn try_from(middleware_command: Command<MonitorSettings>) -> Result<Self, Self::Error> {
+        match middleware_command.command {
+            CommandName::OnSettingsDidChange => Ok(MiddlewareCommand(middleware_command.data)),
+            command_name => Err(serde::de::Error::custom(format!(
+                "ON_SETTING_DID_CHANGE command expected, got {command_name}"
+            ))),
+        }
+    }
+}
+
+// Client Command (from `arduino-serial-plotter` to WS)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "command", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ClientCommand {
-    SendMessage {},
+    SendMessage(String),
     ChangeSettings(MonitorSettings),
 }
+
 impl From<ClientCommand> for Command<serde_json::Value> {
     fn from(value: ClientCommand) -> Self {
         match value {
-            ClientCommand::SendMessage {} => Self {
+            ClientCommand::SendMessage(send_message) => Self {
                 command: CommandName::SendMessage,
-                data: serde_json::to_value("TODO").unwrap(),
+                data: serde_json::to_value(send_message).unwrap(),
             },
             ClientCommand::ChangeSettings(monitor_settings) => Self {
                 command: CommandName::ChangeSettings,
@@ -57,28 +138,6 @@ impl From<ClientCommand> for Command<serde_json::Value> {
         }
     }
 }
-
-///
-/// ```text
-/// let a = serde_json::json!({
-/// pluggableMonitorSettings: {
-///   baudrate: {
-///     id: "baudrate",
-///     label: "Baudrate",
-///     type: "enum",
-///     values: ["300","9600", "115200"],
-///     selectedValue: "9600"
-///   },
-///   otherSetting: {
-///     id: "otherSetting",
-///     label: "Other Setting",
-///     type: "enum",
-///     values: ["A","B", "C"],
-///     selectedValue: "B"
-///   }
-/// }
-/// })
-/// ```
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -103,8 +162,8 @@ pub enum LabelType {
 }
 
 //   type PluggableMonitorSettings = Record<"baudrate", PluggableMonitorSetting>;
-///
 /// PluggableMonitorSettings
+///
 /// ```
 /// use arduino_plotter::protocol::PluggableMonitorSettings;
 ///
@@ -126,7 +185,7 @@ pub enum LabelType {
 /// });
 ///
 /// let settings = serde_json::from_value::<PluggableMonitorSettings>(json).expect("Valid PluggableMonitorSettings");
-/// 
+///
 /// assert_eq!(2, settings.len());
 /// assert!(settings.get("baudrate").is_some());
 /// assert!(settings.get("otherSetting").is_some());
@@ -143,13 +202,12 @@ impl Deref for PluggableMonitorSettings {
         &self.0
     }
 }
+
 impl DerefMut for PluggableMonitorSettings {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
-
-pub const EOL: &[&str] = &["", "\n", "\r", "\r\n"];
 
 /// # Examples
 ///
@@ -158,27 +216,34 @@ pub const EOL: &[&str] = &["", "\n", "\r", "\r\n"];
 ///
 /// let no_line_ending = EndOfLine::NoLineEnding;
 /// assert_eq!("", serde_json::to_value(&no_line_ending).unwrap().as_str().unwrap());
+/// assert_eq!("", &no_line_ending.to_string());
+///
 /// let new_line = EndOfLine::NewLine;
 /// assert_eq!("\n", serde_json::to_value(&new_line).unwrap().as_str().unwrap());
+/// assert_eq!("\n", &new_line.to_string());
+///
 /// let carriage_return = EndOfLine::CarriageReturn;
 /// assert_eq!("\r", serde_json::to_value(&carriage_return).unwrap().as_str().unwrap());
+/// assert_eq!("\r", &carriage_return.to_string());
+///
 /// let carriage_return_new_line = EndOfLine::CarriageReturnNewLine;
 /// assert_eq!("\r\n", serde_json::to_value(&carriage_return_new_line).unwrap().as_str().unwrap());
+/// assert_eq!("\r\n", &carriage_return_new_line.to_string());
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Display, FromStr)]
 pub enum EndOfLine {
+    #[display("")]
     #[serde(rename = "")]
     NoLineEnding,
+    #[display("\n")]
     #[serde(rename = "\n")]
     NewLine,
+    #[display("\r")]
     #[serde(rename = "\r")]
     CarriageReturn,
+    #[display("\r\n")]
     #[serde(rename = "\r\n")]
     CarriageReturnNewLine,
-}
-
-pub fn is_eol(str: String) -> bool {
-    EOL.iter().any(|eol| str.contains(eol))
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -188,9 +253,8 @@ pub struct MonitorModelState {
     pub autoscroll: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<bool>,
-    // todo: use an enum?!
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub line_ending: Option<String>,
+    pub line_ending: Option<EndOfLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interpolate: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -205,171 +269,11 @@ pub struct MonitorModelState {
     pub generate: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorSettings {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pluggable_monitor_settings: Option<PluggableMonitorSettings>,
-    #[serde(rename = "monitorUISettings", skip_serializing_if = "Option::is_none")]
+    #[serde(default, rename = "monitorUISettings", skip_serializing_if = "Option::is_none")]
     pub monitor_ui_settings: Option<MonitorModelState>,
 }
-
-//   pub struct PluggableMonitor {
-//     export namespace Protocol {
-//       export enum ClientCommand {
-//         SEND_MESSAGE = "SEND_MESSAGE",
-//         CHANGE_SETTINGS = "CHANGE_SETTINGS",
-//       }
-
-//       export enum MiddlewareCommand {
-//         ON_SETTINGS_DID_CHANGE = "ON_SETTINGS_DID_CHANGE",
-//       }
-
-//       export type ClientCommandMessage = {
-//         command: ClientCommand;
-//         data: Partial<MonitorSettings> | string;
-//       };
-//       type MiddlewareCommandMessage = {
-//         command: MiddlewareCommand;
-//         data: Partial<MonitorSettings>;
-//       };
-//       type DataMessage = string[];
-
-//       export type Message =
-//         | ClientCommandMessage
-//         | MiddlewareCommandMessage
-//         | DataMessage;
-
-//       export function isClientCommandMessage(
-//         message: Message
-//       ): message is ClientCommandMessage {
-//         return (
-//           !Array.isArray(message) &&
-//           typeof message.command === "string" &&
-//           Object.keys(ClientCommand).includes(message.command)
-//         );
-//       }
-//       export function isMiddlewareCommandMessage(
-//         message: Message
-//       ): message is MiddlewareCommandMessage {
-//         return (
-//           !Array.isArray(message) &&
-//           typeof message.command === "string" &&
-//           Object.keys(MiddlewareCommand).includes(message.command)
-//         );
-//       }
-//       export function isDataMessage(message: Message): message is DataMessage {
-//         return Array.isArray(message);
-//       }
-//     }
-//   }
-
-pub const LINE_COLORS: [&str; 8] = [
-    "#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9", "#F0E442", "#95A5A6",
-];
-
-//   let existingDatasetsMap: {
-//     [key: string]: ChartDataset<"line">;
-//   } = {};
-
-//   export const resetExistingDatasetsMap = () => {
-//     existingDatasetsMap = {};
-//   };
-//   export const resetDatapointCounter = () => {
-//     datapointCounter = 0;
-//   };
-
-//   export let datapointCounter = 0;
-
-//   export const addDataPoints = (
-//     parsedMessages: {
-//       datasetNames: string[];
-//       parsedLines: { [key: string]: number }[];
-//     },
-//     chart: ChartJSOrUndefined,
-//     opts: ChartOptions<"line">,
-//     cubicInterpolationMode: "default" | "monotone",
-//     dataPointThreshold: number,
-//     setForceUpdate: React.Dispatch<any>
-//   ) => {
-//     if (!chart) {
-//       return;
-//     }
-
-//     // if the chart has been crated, can add data to it
-//     if (chart && chart.data.datasets) {
-//       const { datasetNames, parsedLines } = parsedMessages;
-
-//       const existingDatasetNames = Object.keys(existingDatasetsMap);
-
-//       // add missing datasets to the chart
-//       existingDatasetNames.length < 8 &&
-//         datasetNames.forEach((datasetName) => {
-//           if (
-//             !existingDatasetNames.includes(datasetName) &&
-//             existingDatasetNames.length < 8
-//           ) {
-//             const newDataset = {
-//               data: [],
-//               label: datasetName,
-//               borderColor: lineColors[existingDatasetNames.length],
-//               backgroundColor: lineColors[existingDatasetNames.length],
-//               borderWidth: 1,
-//               pointRadius: 0,
-//               cubicInterpolationMode,
-//             };
-
-//             existingDatasetsMap[datasetName] = newDataset;
-//             chart.data.datasets.push(newDataset);
-//             existingDatasetNames.push(datasetName);
-
-//             // used to force a re-render in the parent component
-//             setForceUpdate(existingDatasetNames.length);
-//           }
-//         });
-
-//       // iterate every parsedLine, adding each variable to the corrisponding variable in the dataset
-//       // if a dataset has not variable in the line, fill it with and empty value
-//       parsedLines.forEach((parsedLine) => {
-//         const xAxis =
-//           opts.scales!.x?.type === "realtime" ? Date.now() : datapointCounter++;
-
-//         // add empty values to datasets that are missing in the parsedLine
-//         Object.keys(existingDatasetsMap).forEach((datasetName) => {
-//           const newPoint =
-//             datasetName in parsedLine
-//               ? {
-//                   x: xAxis,
-//                   y: parsedLine[datasetName],
-//                 }
-//               : null;
-
-//           newPoint && existingDatasetsMap[datasetName].data.push(newPoint);
-//         });
-//       });
-
-//       const oldDataValue = datapointCounter - dataPointThreshold;
-//       for (let s = 0; s < chart.data.datasets.length; s++) {
-//         const dataset = chart.data.datasets[s];
-
-//         let delCount = 0;
-//         for (let i = 0; i < dataset.data.length; i++) {
-//           if (dataset.data[i] && (dataset.data[i] as any).x < oldDataValue) {
-//             delCount++;
-//           } else {
-//             dataset.data.splice(0, delCount);
-//             break; // go to the next dataset
-//           }
-
-//           // purge the data if we need to remove all points
-//           if (dataset.data.length === delCount) {
-//             // remove the whole dataset from the chart and the map
-//             delete existingDatasetsMap[dataset.label!];
-//             chart.data.datasets.splice(s, 1);
-//             setForceUpdate(-1);
-//           }
-//         }
-//       }
-//       chart.update();
-//     }
-//   };
