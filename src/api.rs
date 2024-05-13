@@ -110,7 +110,6 @@ impl Client {
         }
     }
 
-
     /// Send a [`MonitorSettings`] ([`MiddlewareCommand`]) to the Arduino Serial Plotter UI
     /// through an already established connection.
     pub async fn set_monitor_settings(
@@ -132,7 +131,7 @@ impl Client {
 
     /// Send a Data lines message to the Arduino Serial Plotter UI to plot.
     ///
-    /// 
+    ///
     pub async fn send(&self, data: &[&str]) -> Result<(), Error> {
         let data_json = serde_json::to_string(&data).expect("Should always be serializable!");
 
