@@ -12,7 +12,7 @@ categories = ["api-bindings", "asynchronous", "visualization", "data-structures"
 keywords = ["arduino", "plotting", "protocol", "json"]
 repository = "https://github.com/LechevSpace/arduino-plotter"
 
-rust-version = "1.64"
+rust-version = "1.70"
 
 [dependencies]
 tracing = "0.1"

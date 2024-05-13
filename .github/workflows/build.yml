@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   lint-and-docs:
-    name: Lint and check docs
+    name: Lints and check docs
     runs-on: ubuntu-latest
 
     steps:
@@ -20,7 +20,8 @@ jobs:
 
     - name: Rust setup (nightly) for docs
       uses: dtolnay/rust-toolchain@nightly
-    
+      with:
+        components: rust-docs, clippy, rustfmt
 
     - name: Lint - rustfmt
       run: cargo fmt --all -- --check
@@ -34,10 +35,12 @@ jobs:
       run: cargo doc --no-deps --all-features
 
   check-and-test:
-        name: Lint and check docs
+        name: Cargo check and test
         runs-on: ubuntu-latest
-    
+
         steps:
+        - name: Checkout
+          uses: actions/checkout@v4
 
         - name: Rust setup (stable)
           uses: dtolnay/rust-toolchain@stable
