@@ -2,7 +2,7 @@
 //!
 //! - Send Settings on established Websocket and act on EndOfLine change from `arduino-serial-plotter-webapp`
 //! - Sends a data message every ~1 sec with random data and 2 different data lines in the same message
-//! 
+//!
 //! By default, `tracing` will run with TRACE level or you can use the `RUST_LOG` env. variable
 //! to override the default level.
 use core::time::Duration;

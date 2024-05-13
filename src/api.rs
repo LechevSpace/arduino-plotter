@@ -58,7 +58,6 @@ impl Stream for Server {
             Poll::Ready(mut guard) => guard.poll_next_unpin(cx).map(|next_value| {
                 next_value.and_then(|result| {
                     let a = result.map_err(ServerError::Ws).and_then(|message| {
-
                         if message.is_close() {
                             debug!("Websocket closed");
                             return Ok(None);
@@ -95,9 +94,8 @@ impl Stream for Server {
     }
 }
 
-
 /// Client for sending Data message or [`MiddlewareCommand`] (i.e. [`MonitorSettings`])
-/// 
+///
 /// Cheap to clone as it has an internal Atomic reference counter ([`Arc`]) for the Websocket Stream
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -117,9 +115,9 @@ impl Client {
     ) -> Result<(), Error> {
         let settings = MiddlewareCommand(monitor_settings);
 
-        debug!("Settings to be sent: {settings:?}");
+        trace!("Settings to be sent: {settings:?}");
         let command_json = serde_json::to_string(&settings).unwrap();
-        debug!("Settings command JSON to be sent: {command_json:?}");
+        trace!("Settings command JSON to be sent: {command_json:?}");
 
         self.ws_sink
             .lock()

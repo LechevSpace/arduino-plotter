@@ -13,6 +13,8 @@ Requirements:
 
 ```bash
 git clone https://github.com/arduino/arduino-serial-plotter-webapp
+# or when using ssh:
+# `git clone git@github.com:arduino/arduino-serial-plotter-webapp.git`
 cd arduino-serial-plotter-webapp
 npm i && npm start
 ```
@@ -26,8 +28,21 @@ The **Arduino serial plotter** will send a request to our CLI and the CLI is wai
 `http://localhost:3000` (with default port **3000**)
 
 #### Running example
-You can use `run` example for a basic usage of the Client and Server:
 
+By default, the examples will run at `trace` log level for the `tracing`
+subscriber, however, you can use the `RUST_LOG` env. variable to override it.
+
+##### A minimal example
+
+Running the `minimal` example will give you the most basic use of the crate
+but it will not be able to send data or handle change of End of Line messages
+from the arduino serial plotter application.
+
+`cargo run --example minimal`
+
+##### A random data generator example
+
+You can use `run` example for a basic usage of the Client and Server:
 
 `cargo run --example run`
 

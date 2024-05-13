@@ -16,48 +16,14 @@ pub fn is_eol(str: String) -> bool {
     EOL.iter().any(|eol| str.contains(eol))
 }
 
-pub trait IntoCommand {
-    fn into_command(&self) -> serde_json::Value;
-}
-
-impl IntoCommand for MiddlewareCommand {
-    fn into_command(&self) -> serde_json::Value {
-        let inner_command = Command::<MonitorSettings>::from(self.clone());
-
-        serde_json::to_value(inner_command).unwrap()
-    }
-}
-
-impl IntoCommand for ClientCommand {
-    fn into_command(&self) -> serde_json::Value {
-        let inner_command = Command::<serde_json::Value>::from(self.clone());
-
-        serde_json::to_value(inner_command).unwrap()
-    }
-}
-
-impl<T> IntoCommand for Data<T>
-where
-    T: Serialize + core::fmt::Display,
-{
-    fn into_command(&self) -> serde_json::Value {
-        serde_json::to_value(
-            self.0
-                .iter()
-                .map(|display| display.to_string())
-                .collect::<Vec<String>>(),
-        )
-        .unwrap()
-    }
-}
-
+/// The generic Command structure defined by the Arduino serial plotter README.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Command<T> {
     pub command: CommandName,
     pub data: T,
 }
 
-/// Data lines message that can be send to Arduino serial plotter
+/// Data lines message that can be send to the Arduino serial plotter
 ///
 /// <https://docs.arduino.cc/software/ide-v2/tutorials/ide-v2-serial-plotter>
 ///
@@ -65,8 +31,14 @@ pub struct Command<T> {
 /// use arduino_plotter::protocol::Data;
 ///
 /// // data with no line ending
-/// let data = Data(vec!["L1:1,L2:2,L3:3,L4:4".to_string(), "Label_1:99,Label_2:98,Label_3:97,Label_4:96".to_string()]);
-/// let data_json = serde_json::json!(["L1:1,L2:2,L3:3,L4:4", "Label_1:99,Label_2:98,Label_3:97,Label_4:96"]);
+/// let data = Data(vec![
+///     "L1:1,L2:2,L3:3,L4:4".to_string(),
+///     "Label_1:99,Label_2:98,Label_3:97,Label_4:96".to_string(),
+/// ]);
+/// let data_json = serde_json::json!([
+///     "L1:1,L2:2,L3:3,L4:4",
+///     "Label_1:99,Label_2:98,Label_3:97,Label_4:96"
+/// ]);
 /// let from_json = serde_json::from_value::<Data<String>>(data_json).expect("should be valid");
 ///
 /// assert_eq!(data, from_json);
@@ -142,16 +114,23 @@ impl From<ClientCommand> for Command<serde_json::Value> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PluggableMonitorSetting {
-    // The setting identifier
+    /// The setting identifier, e.g. `"baudrate"`
+    /// "baudrate": {
+    ///     "id": "baudrate",
+    ///     "label": "Baudrate",
+    ///     "type": "enum",
+    ///     "values": ["300","9600", "115200"],
+    ///     "selectedValue": "9600",
+    ///   },
     pub id: Option<String>,
-    // A human-readable label of the setting (to be displayed on the GUI)
+    /// A human-readable label of the setting (to be displayed on the GUI), e.g. `"Baudrate"`
     pub label: Option<String>,
-    // The setting type (at the moment only "enum" is available)
+    /// The setting type (at the moment only "enum" is available)
     pub r#type: Option<LabelType>,
-    // The values allowed on "enum" types
+    /// The values allowed on "enum" types, e.g. `vec!["300".to_string(), "9600".into(), "115200".into()]`
     #[serde(default)]
     pub values: Vec<String>,
-    // The selected value
+    /// The selected value, e.g. `"9600"`
     pub selected_value: String,
 }
 
@@ -187,8 +166,8 @@ pub enum LabelType {
 /// let settings = serde_json::from_value::<PluggableMonitorSettings>(json).expect("Valid PluggableMonitorSettings");
 ///
 /// assert_eq!(2, settings.len());
-/// assert!(settings.get("baudrate").is_some());
-/// assert!(settings.get("otherSetting").is_some());
+/// assert!(settings.contains_key("baudrate"));
+/// assert!(settings.contains_key("otherSetting"));
 /// ```
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -215,19 +194,40 @@ impl DerefMut for PluggableMonitorSettings {
 /// use arduino_plotter::protocol::EndOfLine;
 ///
 /// let no_line_ending = EndOfLine::NoLineEnding;
-/// assert_eq!("", serde_json::to_value(&no_line_ending).unwrap().as_str().unwrap());
+/// assert_eq!(
+///     "",
+///     serde_json::to_value(&no_line_ending)
+///         .unwrap()
+///         .as_str()
+///         .unwrap()
+/// );
 /// assert_eq!("", &no_line_ending.to_string());
 ///
 /// let new_line = EndOfLine::NewLine;
-/// assert_eq!("\n", serde_json::to_value(&new_line).unwrap().as_str().unwrap());
+/// assert_eq!(
+///     "\n",
+///     serde_json::to_value(&new_line).unwrap().as_str().unwrap()
+/// );
 /// assert_eq!("\n", &new_line.to_string());
 ///
 /// let carriage_return = EndOfLine::CarriageReturn;
-/// assert_eq!("\r", serde_json::to_value(&carriage_return).unwrap().as_str().unwrap());
+/// assert_eq!(
+///     "\r",
+///     serde_json::to_value(&carriage_return)
+///         .unwrap()
+///         .as_str()
+///         .unwrap()
+/// );
 /// assert_eq!("\r", &carriage_return.to_string());
 ///
 /// let carriage_return_new_line = EndOfLine::CarriageReturnNewLine;
-/// assert_eq!("\r\n", serde_json::to_value(&carriage_return_new_line).unwrap().as_str().unwrap());
+/// assert_eq!(
+///     "\r\n",
+///     serde_json::to_value(&carriage_return_new_line)
+///         .unwrap()
+///         .as_str()
+///         .unwrap()
+/// );
 /// assert_eq!("\r\n", &carriage_return_new_line.to_string());
 /// ```
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Display, FromStr)]
@@ -250,21 +250,31 @@ pub enum EndOfLine {
 #[serde(rename_all = "camelCase")]
 pub struct MonitorModelState {
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Used by the serial monitors to stick at the bottom of the window
     pub autoscroll: Option<bool>,
+    /// Enable timestamp next to the actual data used by the serial monitors
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<bool>,
+    /// Clients store the information about the last EOL used when sending a message to the board
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_ending: Option<EndOfLine>,
+    /// Enables interpolation of the chart in the Serial Plotter App
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interpolate: Option<bool>,
+    // Whether to enable Dark theme or stick to the Light theme
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dark_theme: Option<bool>,
+    /// the current websocket port where the communication happens
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ws_port: Option<u16>,
+    /// The port at which the pluggable monitor in the middleware is connected to,
+    /// e.g. `/dev/ttyACM0` (linux), `/dev/ttyUSB0` (linux), etc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial_port: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// The connection status of the pluggable monitor to the actual board
     pub connected: Option<bool>,
+    /// Enable mocked data generation.
     #[serde(default)]
     pub generate: bool,
 }
@@ -274,6 +284,10 @@ pub struct MonitorModelState {
 pub struct MonitorSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pluggable_monitor_settings: Option<PluggableMonitorSettings>,
-    #[serde(default, rename = "monitorUISettings", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "monitorUISettings",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub monitor_ui_settings: Option<MonitorModelState>,
 }
