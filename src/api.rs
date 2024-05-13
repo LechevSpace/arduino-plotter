@@ -13,8 +13,10 @@ use crate::protocol::{ClientCommand, MiddlewareCommand, MonitorSettings};
 
 #[derive(Debug, Error)]
 pub enum ServerError {
+    /// A Websocket Error occurred
     #[error(transparent)]
     Ws(#[from] tokio_websockets::Error),
+    /// An error occurred during the deserializing of a JSON to a value
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     /// WebSocket Message response was not a text one.
@@ -29,7 +31,6 @@ pub enum ServerError {
 /// 2 messages are possible [`ClientCommand`] and a websocket closing message:
 /// - `SEND_MESSAGE` - sending message to the board through serial
 /// - `CHANGE_SETTINGS` - settings for [`EndOfLine`] has bee changed in the application
-///
 ///
 /// Cheap to clone as it has an internal Atomic reference counter ([`Arc`]) for the Websocket Stream
 ///
@@ -109,6 +110,9 @@ impl Client {
         }
     }
 
+
+    /// Send a [`MonitorSettings`] ([`MiddlewareCommand`]) to the Arduino Serial Plotter UI
+    /// through an already established connection.
     pub async fn set_monitor_settings(
         &self,
         monitor_settings: MonitorSettings,
@@ -126,7 +130,10 @@ impl Client {
             .await
     }
 
-    pub async fn send(&self, data: &[String]) -> Result<(), Error> {
+    /// Send a Data lines message to the Arduino Serial Plotter UI to plot.
+    ///
+    /// 
+    pub async fn send(&self, data: &[&str]) -> Result<(), Error> {
         let data_json = serde_json::to_string(&data).expect("Should always be serializable!");
 
         self.ws_sink
