@@ -31,7 +31,6 @@ name = "arduino-plotter"
 version = "0.1.0"
 dependencies = [
  "futures-util",
- "http",
  "parse-display",
  "rand",
  "serde",
