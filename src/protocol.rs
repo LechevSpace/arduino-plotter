@@ -7,15 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use parse_display::{Display, FromStr};
 
-pub const LINE_COLORS: [&str; 8] = [
-    "#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7", "#56B4E9", "#F0E442", "#95A5A6",
-];
-pub const EOL: &[&str] = &["", "\n", "\r", "\r\n"];
-
-pub fn is_eol(str: String) -> bool {
-    EOL.iter().any(|eol| str.contains(eol))
-}
-
 /// The generic Command structure defined by the Arduino serial plotter README.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Command<T> {
@@ -47,19 +38,20 @@ pub struct Command<T> {
 #[serde(transparent)]
 pub struct Data<T: core::fmt::Display>(pub Vec<T>);
 
+/// All the available Command names for both Client ([`ClientCommand`]) and Middleware ([`MiddlewareCommand`]).
 #[derive(Debug, Clone, Serialize, Deserialize, Display, FromStr)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[display(style = "SNAKE_CASE")]
 pub enum CommandName {
-    /// Middleware Command (from WS to `arduino-serial-plotter`)
+    /// Middleware Command (from WebSocket to Arduino Serial Plotter UI)
     OnSettingsDidChange,
-    // Client Command (from `arduino-serial-plotter` to WS)
+    // Client Command (from Arduino Serial Plotter UI to WebSocket)
     SendMessage,
-    // Client Command (from `arduino-serial-plotter` to WS)
+    // Client Command (from Arduino Serial Plotter UI to WebSocket)
     ChangeSettings,
 }
 
-/// Middleware Command (from WS to `arduino-serial-plotter`)
+/// Middleware Command (from WebSocket to Arduino Serial Plotter UI)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     into = "Command<MonitorSettings>",
@@ -88,7 +80,7 @@ impl TryFrom<Command<MonitorSettings>> for MiddlewareCommand {
     }
 }
 
-// Client Command (from `arduino-serial-plotter` to WS)
+/// Client Commands from Arduino Serial Plotter UI to WebSocket)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ClientCommand {
@@ -111,17 +103,20 @@ impl From<ClientCommand> for Command<serde_json::Value> {
     }
 }
 
+/// A single Pluggable monitor setting
+/// ```json
+/// {
+///     "id": "baudrate",
+///     "label": "Baudrate",
+///     "type": "enum",
+///     "values": ["300","9600", "115200"],
+///     "selectedValue": "9600",
+///   }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PluggableMonitorSetting {
     /// The setting identifier, e.g. `"baudrate"`
-    /// "baudrate": {
-    ///     "id": "baudrate",
-    ///     "label": "Baudrate",
-    ///     "type": "enum",
-    ///     "values": ["300","9600", "115200"],
-    ///     "selectedValue": "9600",
-    ///   },
     pub id: Option<String>,
     /// A human-readable label of the setting (to be displayed on the GUI), e.g. `"Baudrate"`
     pub label: Option<String>,
@@ -134,14 +129,15 @@ pub struct PluggableMonitorSetting {
     pub selected_value: String,
 }
 
+/// The Pluggable Monitor setting type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum LabelType {
     Enum,
 }
 
-//   type PluggableMonitorSettings = Record<"baudrate", PluggableMonitorSetting>;
-/// PluggableMonitorSettings
+/// All the Pluggable Monitor settings, i.e. a connected serial device,
+/// that can be changed from the Arduino serial plotter UI.
 ///
 /// ```
 /// use arduino_plotter::protocol::PluggableMonitorSettings;
@@ -169,7 +165,6 @@ pub enum LabelType {
 /// assert!(settings.contains_key("baudrate"));
 /// assert!(settings.contains_key("otherSetting"));
 /// ```
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct PluggableMonitorSettings(pub HashMap<String, PluggableMonitorSetting>);
@@ -188,6 +183,8 @@ impl DerefMut for PluggableMonitorSettings {
     }
 }
 
+/// All possible End Of Line values accepted by the Arduino Serial Plotter UI
+///
 /// # Examples
 ///
 /// ```
@@ -246,25 +243,52 @@ pub enum EndOfLine {
     CarriageReturnNewLine,
 }
 
+impl EndOfLine {
+    /// A list of all the EndOfLine values as strings.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use arduino_plotter::protocol::EndOfLine;
+    ///
+    /// let all = &[
+    ///     EndOfLine::NoLineEnding.to_string(),
+    ///     EndOfLine::NewLine.to_string(),
+    ///     EndOfLine::CarriageReturn.to_string(),
+    ///     EndOfLine::CarriageReturnNewLine.to_string(),
+    /// ];
+    ///
+    /// assert_eq!(EndOfLine::EOL, all);
+    /// ```
+    pub const EOL: &'static [&'static str] = &["", "\n", "\r", "\r\n"];
+
+    /// Whether a string contains any of the EndOfLine values inside of it.
+    pub fn contains_eol(string: String) -> bool {
+        Self::EOL.iter().any(|eol| string.contains(eol))
+    }
+}
+
+/// All the UI Monitor settings that can be changed in the Arduino serial
+/// plotter application.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorModelState {
     #[serde(skip_serializing_if = "Option::is_none")]
-    /// Used by the serial monitors to stick at the bottom of the window
+    /// Used by the serial monitors to stick at the bottom of the window.
     pub autoscroll: Option<bool>,
-    /// Enable timestamp next to the actual data used by the serial monitors
+    /// Enable timestamp next to the actual data used by the serial monitors.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<bool>,
-    /// Clients store the information about the last EOL used when sending a message to the board
+    /// Clients store the information about the last EOL used when sending a message to the board.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_ending: Option<EndOfLine>,
-    /// Enables interpolation of the chart in the Serial Plotter App
+    /// Enables interpolation of the chart in the Serial Plotter App.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interpolate: Option<bool>,
-    // Whether to enable Dark theme or stick to the Light theme
+    // Whether to enable Dark theme or stick to the Light theme.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dark_theme: Option<bool>,
-    /// the current websocket port where the communication happens
+    /// the current websocket port where the communication happens.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ws_port: Option<u16>,
     /// The port at which the pluggable monitor in the middleware is connected to,
@@ -272,13 +296,16 @@ pub struct MonitorModelState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial_port: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    /// The connection status of the pluggable monitor to the actual board
+    /// The connection status of the pluggable monitor to the actual board.
     pub connected: Option<bool>,
     /// Enable mocked data generation.
     #[serde(default)]
     pub generate: bool,
 }
 
+/// The [`MiddlewareCommand`] Monitor settings that are sent to the
+/// Arduino serial plotter UI.
+/// This contains both [`PluggableMonitorSettings`] and [`MonitorModelState`].
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorSettings {
