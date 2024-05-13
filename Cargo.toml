@@ -1,3 +1,6 @@
+[workspace]
+members = ["."]
+
 [package]
 name = "arduino-plotter"
 version = "0.1.0"
