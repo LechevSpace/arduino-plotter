@@ -2,7 +2,7 @@ name: MSRV build
 
 on:
   push:
-  # will checkout the default branch `development`
+  # will checkout the default branch `main`
   schedule:
     # run every Friday at 17:00
     - cron: '00 17 * * 5'
