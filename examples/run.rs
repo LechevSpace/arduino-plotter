@@ -106,7 +106,7 @@ async fn run_client_task(client: Client) {
         }
         let data1_str = format!("L1:{},L2:{},L3:{}\n", data[0], data[1], data[2]);
         let data2_str = format!("A:{},B:{},C:{}\n", data[3], data[4], data[5]);
-        let data = vec![data1_str, data2_str];
+        let data: Vec<&str> = vec![&data1_str, &data2_str];
 
         let send_result = client.send(&data).await;
         match send_result {
