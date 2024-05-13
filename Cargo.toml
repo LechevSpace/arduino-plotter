@@ -6,7 +6,11 @@ name = "arduino-plotter"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-authors = ["Lechev.space Ltd <dev@lechev.space>", "Lachezar Lechev"]
+authors = ["Lechev.space <dev@lechev.space>", "Lachezar Lechev"]
+description = "API bindings (protocol) and Server/Client API for Arduino serial plotter"
+categories = ["api-bindings", "asynchronous", "visualization", "data-structures"]
+keywords = ["arduino", "plotting", "protocol", "json"]
+repository = "https://github.com/LechevSpace/arduino-plotter"
 
 [dependencies]
 tracing = "0.1"
@@ -16,7 +20,7 @@ thiserror = "1.0.60"
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["net", "sync"] }
 tokio-websockets = { version = "0.8", features = ["client", "server", "sha1_smol", "rand"] }
 tokio-stream = "0.1"
 futures-util = { version = "0.3", features = ["sink"] }
@@ -29,3 +33,4 @@ rand = "0.8"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tokio = { version = "1", features = ["net", "sync", "macros"] }
