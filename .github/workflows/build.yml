@@ -16,7 +16,7 @@ jobs:
     steps:
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Rust setup (nightly) for docs
       uses: dtolnay/rust-toolchain@nightly
@@ -40,7 +40,7 @@ jobs:
 
         steps:
         - name: Checkout
-          uses: actions/checkout@v4
+          uses: actions/checkout@v5
 
         - name: Rust setup (stable)
           uses: dtolnay/rust-toolchain@stable
